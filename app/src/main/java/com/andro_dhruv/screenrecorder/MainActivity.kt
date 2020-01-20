@@ -13,7 +13,6 @@ import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
-import android.os.ParcelFileDescriptor
 import android.provider.Settings
 import android.util.DisplayMetrics
 import android.util.Log
@@ -29,12 +28,9 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.snackbar.Snackbar
 import kotlinx.android.synthetic.main.activity_main.*
 import kotlinx.android.synthetic.main.content_main.*
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
 import java.io.File
-import java.io.FileInputStream
-import java.io.FileOutputStream
 import java.io.IOException
+
 
 class MainActivity : AppCompatActivity(), VideoFileAdapter.OnItemClickListener {
     private val myAdapter = VideoFileAdapter(this)
@@ -53,9 +49,6 @@ class MainActivity : AppCompatActivity(), VideoFileAdapter.OnItemClickListener {
     private val DISPLAY_HEIGHT = 1280
     private val mFrameRate = 16
     private val folder = "${Environment.getExternalStorageDirectory()}/ScreenRecorder"
-    private lateinit var reader : FileInputStream
-    private lateinit var writer : FileOutputStream
-
 
     private val ORIENTATIONS = SparseIntArray().apply {
         append(Surface.ROTATION_0, 90)
@@ -99,15 +92,10 @@ class MainActivity : AppCompatActivity(), VideoFileAdapter.OnItemClickListener {
         val file = File(folder)
         if (!file.exists()) file.mkdir()
         try {
-            val fileDesPair = ParcelFileDescriptor.createPipe()
-            val readFd = ParcelFileDescriptor(fileDesPair[0])
-            val writeFd = ParcelFileDescriptor(fileDesPair[1])
-
             mMediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC)
             mMediaRecorder.setVideoSource(MediaRecorder.VideoSource.SURFACE)
             mMediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-//            mMediaRecorder.setOutputFile("$folder/${System.currentTimeMillis()}.mp4")
-            mMediaRecorder.setOutputFile(writeFd.fileDescriptor)
+            mMediaRecorder.setOutputFile("$folder/${System.currentTimeMillis()}.mp4")
             mMediaRecorder.setVideoSize(DISPLAY_WIDTH, DISPLAY_HEIGHT)
             mMediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264)
             mMediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB)
@@ -117,10 +105,6 @@ class MainActivity : AppCompatActivity(), VideoFileAdapter.OnItemClickListener {
             mMediaRecorder.setOrientationHint(orientation)
             mMediaRecorder.setVideoEncodingBitRate(512 * 1000)
             mMediaRecorder.setVideoEncodingBitRate(3000000)
-
-            reader = FileInputStream(readFd.fileDescriptor)
-            writer = FileOutputStream(writeFd.fileDescriptor)
-
             mMediaRecorder.prepare()
 
         } catch (e: IOException) {
@@ -136,24 +120,7 @@ class MainActivity : AppCompatActivity(), VideoFileAdapter.OnItemClickListener {
         mVirtualDisplay = createVirtualDisplay()
         mMediaRecorder.start()
         isRecording = true
-        writeToFile()
         fabIconChange()
-    }
-
-    private fun writeToFile() = GlobalScope.launch {
-            try {
-                val buffer = ByteArray(16384)
-                while (isRecording){
-                    var len = 0
-                    while (len > -1){
-                        len = reader.read(buffer, 0, buffer.size)
-                        writer.write(buffer, 0, len)
-                    }
-                }
-
-            }catch (e : IOException){
-                Log.d(TAG, e.message)
-            }
     }
 
     private fun stopScreenSharing() {
@@ -220,7 +187,6 @@ class MainActivity : AppCompatActivity(), VideoFileAdapter.OnItemClickListener {
                     mMediaRecorder.start()
                     isRecording = true
                     fabIconChange()
-                    writeToFile()
 
                 } else {
                     Toast.makeText(this, "Screen Cast Permission Denied", Toast.LENGTH_SHORT).show()
